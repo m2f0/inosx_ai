@@ -5,6 +5,11 @@ import os
 import PyPDF2
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+import logging
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Carregar variáveis do .env
 load_dotenv()
@@ -15,6 +20,7 @@ CORS(app)  # Permite requisições do React
 # Configuração do OpenAI usando variável de ambiente
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
+    logger.error("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
     raise ValueError("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
 
 client = openai.OpenAI(api_key=api_key)
@@ -170,7 +176,14 @@ def transcrever_audio():
 
 @app.route('/api/test', methods=['GET'])
 def test():
+    logger.info("Teste de API chamado")
     return {'status': 'ok', 'message': 'API is working!'}
+
+# Rota raiz para verificação básica
+@app.route('/', methods=['GET'])
+def home():
+    logger.info("Rota raiz chamada")
+    return {'status': 'ok', 'message': 'Backend is running'}
 
 if __name__ == '__main__':
     if not os.path.exists(PDFS_DIR):
