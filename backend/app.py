@@ -4,6 +4,7 @@ import openai
 import os
 import PyPDF2
 from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
 
 # Carregar variáveis do .env
 load_dotenv()
@@ -20,6 +21,13 @@ client = openai.OpenAI(api_key=api_key)
 
 # Diretório onde os PDFs estão armazenados
 PDFS_DIR = "pdfs"
+
+# Configuração para upload de arquivos
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def ler_pdfs():
     """Lê todos os arquivos PDF da pasta local e retorna uma lista de dicionários contendo o nome do arquivo e seu conteúdo."""
@@ -61,9 +69,7 @@ def perguntar():
     if not pergunta:
         return jsonify({'error': 'Pergunta não pode ser vazia'}), 400
 
-    # Buscar conteúdo dos PDFs locais
     documentos = ler_pdfs()
-
     if not documentos:
         return jsonify({'resposta': "Nenhum documento foi encontrado na pasta 'pdfs'."})
 
@@ -99,14 +105,65 @@ def perguntar():
                     "Além disso, posso conectá-lo com nossa equipe comercial para uma conversa mais detalhada. O que você gostaria de saber primeiro?'"
                     
                     "Lembre-se: seu objetivo é criar uma experiência memorável enquanto guia o cliente em sua jornada de descoberta das soluções INOSX."
+                    
+                    "\n\nAo final de cada resposta, sugira 3 perguntas relacionadas ao contexto da conversa que o usuário poderia fazer em seguida."
+                    "Formate sua resposta da seguinte forma:\n"
+                    "RESPOSTA:\n[sua resposta normal aqui]\n"
+                    "SUGESTÕES:\n• [primeira pergunta sugerida]\n• [segunda pergunta sugerida]\n• [terceira pergunta sugerida]"
                 )},
                 {"role": "user", "content": f"Pergunta: {pergunta}\n\n{contexto}"}
             ],
-            temperature=0.7  # Aumentando a temperatura para respostas mais criativas
+            temperature=0.7
         )
 
-        resposta = response.choices[0].message.content
-        return jsonify({'resposta': resposta})
+        resposta_completa = response.choices[0].message.content
+        
+        # Separar a resposta e as sugestões
+        partes = resposta_completa.split("SUGESTÕES:")
+        resposta_principal = partes[0].replace("RESPOSTA:", "").strip()
+        sugestoes = []
+        
+        if len(partes) > 1:
+            # Remove os bullets points (•) e espaços extras das sugestões
+            sugestoes = [s.replace('•', '').strip() for s in partes[1].strip().split('\n') if s.strip()]
+
+        return jsonify({
+            'resposta': resposta_principal,
+            'sugestoes': sugestoes
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/transcrever-audio', methods=['POST'])
+def transcrever_audio():
+    if 'audio' not in request.files:
+        return jsonify({'error': 'Nenhum arquivo de áudio enviado'}), 400
+    
+    arquivo = request.files['audio']
+    if arquivo.filename == '':
+        return jsonify({'error': 'Nome do arquivo vazio'}), 400
+
+    try:
+        # Salva o arquivo temporariamente
+        filename = secure_filename(arquivo.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        arquivo.save(filepath)
+
+        # Transcreve o áudio usando a API Whisper da OpenAI
+        with open(filepath, 'rb') as audio_file:
+            transcricao = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="pt"
+            )
+
+        # Remove o arquivo temporário
+        os.remove(filepath)
+
+        return jsonify({
+            'transcricao': transcricao.text
+        })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
