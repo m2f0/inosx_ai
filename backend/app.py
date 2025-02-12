@@ -23,7 +23,7 @@ if not api_key:
     logger.error("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
     raise ValueError("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
 
-client = openai.OpenAI(api_key=api_key)
+openai.api_key = api_key  # Forma antiga de configurar a API key
 
 # Diretório onde os PDFs estão armazenados
 PDFS_DIR = "pdfs"
