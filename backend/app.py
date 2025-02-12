@@ -168,6 +168,10 @@ def transcrever_audio():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/test', methods=['GET'])
+def test():
+    return {'status': 'ok', 'message': 'API is working!'}
+
 if __name__ == '__main__':
     if not os.path.exists(PDFS_DIR):
         os.makedirs(PDFS_DIR)
