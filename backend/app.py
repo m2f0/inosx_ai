@@ -170,5 +170,5 @@ def transcrever_audio():
 
 if __name__ == '__main__':
     if not os.path.exists(PDFS_DIR):
-        os.makedirs(PDFS_DIR)  # Criar a pasta se ela não existir
-    app.run(debug=True, host="0.0.0.0", port=5000)
+        os.makedirs(PDFS_DIR)
+    app.run()  # Remova debug=True e host/port fixos para produção
