@@ -25,6 +25,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [modoDemo, setModoDemo] = useState(false); // Novo estado
   const [audioBlob, setAudioBlob] = useState(null);
   const chatContainerRef = useRef(null);
   const speechSynthesis = window.speechSynthesis;
@@ -75,13 +76,19 @@ function App() {
   const enviarPergunta = async (perguntaEnviada = pergunta) => {
     if (!perguntaEnviada.trim()) return;
 
+    // Verifica se está ativando o modo demo
+    if (perguntaEnviada.toLowerCase().trim() === 'modo de demonstração' || 
+        perguntaEnviada.toLowerCase().trim() === 'iniciar demonstração') {
+      setModoDemo(true);
+    }
+
     const novaMensagem = { tipo: "user", texto: perguntaEnviada };
     setRespostas(prev => [...prev, novaMensagem]);
     setPergunta("");
     setIsLoading(true);
 
     try {
-      const res = await axios.post("/perguntar", { 
+      const res = await axios.post("http://localhost:5000/perguntar", { 
         pergunta: perguntaEnviada 
       });
       
@@ -93,12 +100,7 @@ function App() {
       
       setRespostas(prev => [...prev, novaResposta]);
     } catch (error) {
-      console.error("Erro ao obter resposta:", error);
-      setRespostas(prev => [...prev, {
-        tipo: "bot",
-        texto: "Desculpe, ocorreu um erro ao processar sua pergunta. Por favor, tente novamente.",
-        sugestoes: []
-      }]);
+      console.error("Erro ao obter resposta", error);
     } finally {
       setIsLoading(false);
     }
@@ -193,8 +195,24 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-900 text-white flex-col">
-      <div className="p-4 bg-gray-800 flex justify-center">
+      {/* Cabeçalho */}
+      <div className="p-4 bg-gray-800 flex justify-between items-center">
         <h2 className="text-lg">INOSX AI</h2>
+        {modoDemo && (
+          <div className="flex items-center">
+            <span className="mr-2">👕</span>
+            <span className="text-sm">Modo Demo: StyleTech Camisetas</span>
+            <button 
+              onClick={() => {
+                setModoDemo(false);
+                setRespostas([]);
+              }}
+              className="ml-4 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
+            >
+              Sair do Demo
+            </button>
+          </div>
+        )}
       </div>
 
       <div 
@@ -279,7 +297,7 @@ function App() {
             onKeyDown={handleKeyPress}
             disabled={isLoading || isRecording}
           />
-          
+            
           <button
             onClick={isRecording ? stopRecording : startRecording}
             className={`ml-2 p-2 rounded transition-colors ${
