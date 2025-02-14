@@ -15,12 +15,26 @@ import {
   FaStop 
 } from "react-icons/fa";
 import CamisetaImage from './components/CamisetaImage';
+import { marked } from 'marked';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Checkout from './components/Checkout';
 
 // Configuração do Axios
 axios.defaults.baseURL = 'http://localhost:5000';
 axios.defaults.headers.post['Content-Type'] = 'application/json';
 
 function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<ChatInterface />} />
+        <Route path="/checkout" element={<Checkout />} />
+      </Routes>
+    </Router>
+  );
+}
+
+function ChatInterface() {
   const [pergunta, setPergunta] = useState("");
   const [respostas, setRespostas] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,6 +46,13 @@ function App() {
   const speechSynthesis = window.speechSynthesis;
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
+
+  // Configurar marked para ser seguro e permitir apenas tags específicas
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    sanitize: false
+  });
 
   // Função para limpar o texto de tags HTML
   const stripHtml = (html) => {
@@ -153,10 +174,7 @@ function App() {
   };
 
   const formatarResposta = (texto) => {
-    return texto
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/- (.*?)\n/g, '<li class="mb-2">$1</li>')
-      .replace(/\n/g, '<br>');
+    return marked(texto);
   };
 
   const getButtonIcon = (index) => {
@@ -232,45 +250,49 @@ function App() {
     }
   };
 
-  const renderMensagem = (msg, index) => {
-    return (
-      <div key={index} className="space-y-2">
-        <div
-          className={`p-4 rounded-lg max-w-2xl ${
-            msg.tipo === "user"
-              ? "bg-blue-600 ml-auto text-white"
-              : "bg-gray-700 text-gray-300 border-l-4 border-blue-400"
-          }`}
-        >
-          <div className="flex justify-between items-start">
+  const renderMensagem = (msg) => (
+    <div key={msg.id} className="space-y-2">
+      <div
+        className={`p-4 rounded-lg max-w-2xl ${
+          msg.tipo === "user"
+            ? "bg-blue-600 ml-auto text-white"
+            : "bg-gray-700 text-gray-300 border-l-4 border-blue-400"
+        }`}
+      >
+        <div className="flex justify-between items-start">
+          {msg.tipo === "bot" && <FaRobot className="text-xl mt-1 mr-2 flex-shrink-0" />}
+          <div className="flex-grow">
             {msg.tipo === "bot" ? (
-              <FaRobot className="text-xl mt-1" />
-            ) : null}
-            <div className="flex-grow">
-              {msg.tipo === "bot" ? (
-                <div dangerouslySetInnerHTML={{ __html: msg.texto }} />
-              ) : (
-                msg.texto
-              )}
-            </div>
+              <div 
+                className="markdown-content"
+                dangerouslySetInnerHTML={{ __html: formatarResposta(msg.texto) }} 
+              />
+            ) : (
+              msg.texto
+            )}
           </div>
         </div>
-        {msg.tipo === "bot" && msg.sugestoes && (
-          <div className="flex flex-wrap gap-2">
-            {msg.sugestoes.map((sugestao, idx) => (
-              <button
-                key={idx}
-                onClick={() => enviarPergunta(sugestao)}
-                className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm"
-              >
-                {sugestao}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
-    );
-  };
+      {msg.tipo === "bot" && msg.sugestoes && (
+        <div className="flex flex-wrap gap-2">
+          {msg.sugestoes.map((sugestao, idx) => (
+            <button
+              key={idx}
+              onClick={() => enviarPergunta(sugestao)}
+              className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm"
+            >
+              {sugestao}
+            </button>
+          ))}
+        </div>
+      )}
+      {msg.tipo === "bot" && msg.mostrar_galeria && msg.camisetas && (
+        <div className="mt-4">
+          <RespostaCamisetas camisetas={msg.camisetas} />
+        </div>
+      )}
+    </div>
+  );
 
   const handleSugestao = (sugestao) => {
     setPergunta(sugestao);
