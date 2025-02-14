@@ -14,6 +14,7 @@ import {
   FaMicrophone, 
   FaStop 
 } from "react-icons/fa";
+import CamisetaImage from './components/CamisetaImage';
 
 // Configuração do Axios
 axios.defaults.baseURL = 'http://localhost:5000';
@@ -73,43 +74,81 @@ function App() {
     scrollToBottom();
   }, [respostas, isLoading]);
 
-  const enviarPergunta = async (perguntaEnviada = pergunta) => {
-    if (!perguntaEnviada.trim()) return;
+  const handleDemoMode = () => {
+    setModoDemo(true);
+    setRespostas([{
+      tipo: "bot",
+      texto: "Bem-vindo ao modo de demonstração da StyleTech Camisetas! Como posso ajudar você hoje?",
+      sugestoes: [
+        "Quais são os produtos disponíveis?",
+        "Como funciona o processo de pedido?",
+        "Qual o prazo de entrega?"
+      ]
+    }]);
+  };
 
-    // Verifica se está ativando o modo demo
-    if (perguntaEnviada.toLowerCase().trim() === 'modo de demonstração' || 
-        perguntaEnviada.toLowerCase().trim() === 'iniciar demonstração') {
-      setModoDemo(true);
+  const enviarPergunta = async (perguntaTexto = pergunta) => {
+    if (!perguntaTexto || !perguntaTexto.trim()) {
+      return;
     }
 
-    const novaMensagem = { tipo: "user", texto: perguntaEnviada };
-    setRespostas(prev => [...prev, novaMensagem]);
-    setPergunta("");
-    setIsLoading(true);
+    // Verifica se o texto é o comando para ativar o modo demo
+    if (perguntaTexto.toLowerCase() === "modo de demonstração") {
+      handleDemoMode();
+      return;
+    }
 
     try {
-      const res = await axios.post("http://localhost:5000/perguntar", { 
-        pergunta: perguntaEnviada 
-      });
-      
-      const novaResposta = { 
-        tipo: "bot", 
-        texto: formatarResposta(res.data.resposta),
-        sugestoes: res.data.sugestoes
+      setIsLoading(true);
+      const novaPergunta = {
+        tipo: "user",
+        texto: perguntaTexto
       };
       
+      setRespostas(prev => [...prev, novaPergunta]);
+      
+      const response = await axios.post('/perguntar', {
+        pergunta: perguntaTexto,
+        modoDemo: modoDemo
+      });
+
+      console.log('Resposta do servidor:', response.data); // Log para debug
+
+      if (!response.data) {
+        throw new Error('Resposta vazia do servidor');
+      }
+
+      const novaResposta = {
+        tipo: "bot",
+        texto: response.data.resposta,
+        sugestoes: response.data.sugestoes,
+        mostrar_galeria: response.data.mostrar_galeria,
+        camisetas: response.data.camisetas
+      };
+      
+      console.log('Nova resposta formatada:', novaResposta); // Log para debug
+      
       setRespostas(prev => [...prev, novaResposta]);
+      setPergunta("");
+
     } catch (error) {
-      console.error("Erro ao obter resposta", error);
+      console.error("Erro ao obter resposta:", error);
+      const errorMessage = error.response?.data?.error || error.message;
+      
+      setRespostas(prev => [...prev, {
+        tipo: "bot",
+        texto: `Erro: ${errorMessage}`,
+        sugestoes: ["Tentar novamente"]
+      }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleKeyPress = (event) => {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      enviarPergunta();
+      enviarPergunta(pergunta);
     }
   };
 
@@ -193,12 +232,76 @@ function App() {
     }
   };
 
+  const renderMensagem = (msg, index) => {
+    return (
+      <div key={index} className="space-y-2">
+        <div
+          className={`p-4 rounded-lg max-w-2xl ${
+            msg.tipo === "user"
+              ? "bg-blue-600 ml-auto text-white"
+              : "bg-gray-700 text-gray-300 border-l-4 border-blue-400"
+          }`}
+        >
+          <div className="flex justify-between items-start">
+            {msg.tipo === "bot" ? (
+              <FaRobot className="text-xl mt-1" />
+            ) : null}
+            <div className="flex-grow">
+              {msg.tipo === "bot" ? (
+                <div dangerouslySetInnerHTML={{ __html: msg.texto }} />
+              ) : (
+                msg.texto
+              )}
+            </div>
+          </div>
+        </div>
+        {msg.tipo === "bot" && msg.sugestoes && (
+          <div className="flex flex-wrap gap-2">
+            {msg.sugestoes.map((sugestao, idx) => (
+              <button
+                key={idx}
+                onClick={() => enviarPergunta(sugestao)}
+                className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm"
+              >
+                {sugestao}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const handleSugestao = (sugestao) => {
+    setPergunta(sugestao);
+    enviarPergunta(sugestao);
+  };
+
+  const RespostaCamisetas = ({ camisetas }) => {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {camisetas.map((camiseta, index) => (
+          <div key={index} className="bg-gray-800 p-4 rounded-lg">
+            <CamisetaImage camiseta={camiseta} />
+            <h3 className="text-sm font-medium text-center">{camiseta.nome}</h3>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div className="flex h-screen bg-gray-900 text-white flex-col">
-      {/* Cabeçalho */}
+    <div className="flex flex-col h-screen bg-gray-900 text-white">
       <div className="p-4 bg-gray-800 flex justify-between items-center">
         <h2 className="text-lg">INOSX AI</h2>
-        {modoDemo && (
+        {!modoDemo ? (
+          <button
+            onClick={handleDemoMode}
+            className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
+          >
+            Modo Demo
+          </button>
+        ) : (
           <div className="flex items-center">
             <span className="mr-2">👕</span>
             <span className="text-sm">Modo Demo: StyleTech Camisetas</span>
@@ -218,13 +321,10 @@ function App() {
       <div 
         ref={chatContainerRef}
         className="flex-1 p-4 overflow-y-auto space-y-4"
-        style={{
-          scrollBehavior: 'smooth',
-          maxHeight: 'calc(100vh - 140px)'
-        }}
+        style={{ maxHeight: 'calc(100vh - 140px)' }} // Ajuste para garantir espaço suficiente
       >
-        {respostas.map((msg, msgIndex) => (
-          <div key={msgIndex} className="space-y-2">
+        {respostas.map((msg, index) => (
+          <div key={index} className="space-y-2">
             <div
               className={`p-4 rounded-lg max-w-2xl ${
                 msg.tipo === "user"
@@ -235,53 +335,39 @@ function App() {
               <div className="flex justify-between items-start">
                 <div className="flex-grow">
                   {msg.tipo === "bot" ? (
-                    <div dangerouslySetInnerHTML={{ __html: `<ul class="list-disc pl-5">${msg.texto}</ul>` }} />
+                    <div>
+                      <div dangerouslySetInnerHTML={{ __html: `<ul class="list-disc pl-5">${msg.texto}</ul>` }} />
+                      {msg.mostrar_galeria && msg.camisetas && (
+                        <div className="mt-4 w-full"> {/* Adicionado container específico para galeria */}
+                          <RespostaCamisetas camisetas={msg.camisetas} />
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     msg.texto
                   )}
                 </div>
-                {msg.tipo === "bot" && (
-                  <button
-                    onClick={() => speak(msg.texto)}
-                    className={`ml-2 p-2 rounded-full hover:bg-gray-600 transition-colors ${
-                      isSpeaking ? 'text-blue-400' : 'text-gray-400'
-                    }`}
-                  >
-                    {isSpeaking ? <FaVolumeMute size={20} /> : <FaVolumeUp size={20} />}
-                  </button>
-                )}
               </div>
             </div>
-            
-            {msg.tipo === "bot" && msg.sugestoes && msg.sugestoes.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {msg.sugestoes.map((sugestao, sugestaoIndex) => (
+            {msg.tipo === "bot" && msg.sugestoes && (
+              <div className="flex flex-wrap gap-2">
+                {msg.sugestoes.map((sugestao, idx) => (
                   <button
-                    key={`${msgIndex}-${sugestaoIndex}`}
+                    key={idx}
                     onClick={() => enviarPergunta(sugestao)}
-                    className={`
-                      px-4 py-2 rounded-full
-                      text-sm font-medium
-                      flex items-center gap-2
-                      transition-colors
-                      ${sugestaoIndex % 3 === 0 ? 'bg-blue-600 hover:bg-blue-700' : 
-                        sugestaoIndex % 3 === 1 ? 'bg-purple-600 hover:bg-purple-700' : 
-                        'bg-teal-600 hover:bg-teal-700'}
-                    `}
+                    className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm"
                   >
-                    {getButtonIcon(sugestaoIndex)}
-                    <span>{sugestao}</span>
+                    {sugestao}
                   </button>
                 ))}
               </div>
             )}
           </div>
         ))}
-
         {isLoading && (
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span>Pensando...</span>
+          <div className="flex items-center space-x-2 text-gray-400">
+            <FaRobot className="text-xl" />
+            <span>Digitando...</span>
           </div>
         )}
       </div>

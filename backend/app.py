@@ -1,178 +1,251 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+import openai
 import os
-from werkzeug.utils import secure_filename
-from openai import OpenAI
-import logging
 from dotenv import load_dotenv
+import logging
+import os.path
+import shutil
+from pathlib import Path
 
-# Configuração básica
-app = Flask(__name__)
-CORS(app)  # Configuração CORS mais simples possível
-
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
+# Configuração de logging mais detalhada
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Definir o caminho absoluto para o diretório de camisetas
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+CAMISETAS_DIR = os.path.join(BACKEND_DIR, "camisetas")
+
+# Log do caminho para debug
+logger.debug(f"Backend directory: {BACKEND_DIR}")
+logger.debug(f"Camisetas directory: {CAMISETAS_DIR}")
 
 # Carregar variáveis do .env
 load_dotenv()
 
+app = Flask(__name__)
+CORS(app)
+
 # Configuração do OpenAI
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    logger.error("OPENAI_API_KEY não encontrada")
+    logger.error("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
     raise ValueError("OPENAI_API_KEY não encontrada")
 
-client = OpenAI(api_key=api_key)
+client = openai.Client(api_key=api_key)
 
-# Configuração de pastas
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+SYSTEM_PROMPT = """
+Você é um assistente virtual especializado em atendimento ao cliente.
+Mantenha suas respostas concisas e diretas.
+"""
+
+DEMO_PROMPT = """
+Você é um assistente virtual da StyleTech Camisetas, uma empresa especializada em camisetas personalizadas.
+Mantenha suas respostas focadas no contexto de uma loja de camisetas, incluindo:
+- Tipos de camisetas (básica, premium, gola V, etc)
+- Processos de personalização
+- Prazos de entrega (5-7 dias úteis)
+- Preços base (camisetas básicas R$39,90, premium R$59,90)
+- Descontos para pedidos em quantidade
+- Processo de pedido e personalização
+
+Mantenha um tom profissional mas amigável, sempre focando nas soluções da StyleTech Camisetas.
+"""
+
+# Função para inicializar o diretório de camisetas com imagens de exemplo
+def init_camisetas_dir():
+    # Criar diretório se não existir
+    if not os.path.exists(CAMISETAS_DIR):
+        os.makedirs(CAMISETAS_DIR)
+        logger.info(f"Diretório de camisetas criado: {CAMISETAS_DIR}")
+    
+    # Lista de camisetas padrão (você precisará fornecer estas imagens)
+    camisetas_padrao = [
+        {
+            'nome': 'Camiseta Básica Preta',
+            'arquivo': 'camiseta-basica-preta.jpg'
+        },
+        {
+            'nome': 'Camiseta Básica Branca',
+            'arquivo': 'camiseta-basica-branca.jpg'
+        },
+        {
+            'nome': 'Camiseta Premium Azul',
+            'arquivo': 'camiseta-premium-azul.jpg'
+        }
+    ]
+    
+    return camisetas_padrao
+
+# Chamar a função de inicialização ao iniciar o app
+camisetas_padrao = init_camisetas_dir()
+
+@app.route('/camisetas/<path:filename>')
+def serve_camiseta(filename):
+    try:
+        # Remover qualquer prefixo 'camisetas/' do filename
+        filename = filename.replace('camisetas/', '')
+        file_path = os.path.join(CAMISETAS_DIR, filename)
+        
+        logger.debug(f"Requisição de imagem recebida para: {filename}")
+        logger.debug(f"Caminho completo do arquivo: {file_path}")
+        
+        if not os.path.exists(file_path):
+            logger.error(f"Arquivo não encontrado: {file_path}")
+            return jsonify({"error": "Arquivo não encontrado"}), 404
+        
+        # Determinar o mimetype baseado na extensão do arquivo
+        extension = os.path.splitext(filename)[1].lower()
+        mimetype = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif'
+        }.get(extension, 'application/octet-stream')
+        
+        return send_file(
+            file_path,
+            mimetype=mimetype,
+            as_attachment=False,
+            etag=True,
+            conditional=True,
+            last_modified=os.path.getmtime(file_path)
+        )
+    except Exception as e:
+        logger.error(f"Erro ao servir imagem {filename}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/listar-camisetas')
+def listar_camisetas():
+    try:
+        logger.debug(f"Verificando diretório: {CAMISETAS_DIR}")
+        
+        if not os.path.exists(CAMISETAS_DIR):
+            logger.warning(f"Diretório de camisetas não encontrado: {CAMISETAS_DIR}")
+            return jsonify([])
+
+        camisetas = []
+        arquivos = os.listdir(CAMISETAS_DIR)
+        
+        # Se não houver arquivos, retornar lista das camisetas padrão
+        if not arquivos:
+            return jsonify([
+                {
+                    'nome': camiseta['nome'],
+                    'imagem': camiseta['arquivo'],
+                    'id': idx + 1
+                }
+                for idx, camiseta in enumerate(camisetas_padrao)
+            ])
+
+        # Se houver arquivos, listar as camisetas existentes
+        for arquivo in arquivos:
+            if arquivo.lower().endswith(('.png', '.jpg', '.jpeg')):
+                caminho_completo = os.path.join(CAMISETAS_DIR, arquivo)
+                if os.path.isfile(caminho_completo):
+                    camisetas.append({
+                        'nome': os.path.splitext(arquivo)[0].replace('-', ' ').title(),
+                        'imagem': arquivo,
+                        'id': len(camisetas) + 1
+                    })
+        
+        return jsonify(camisetas)
+    except Exception as e:
+        logger.error(f"Erro ao listar camisetas: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/perguntar', methods=['POST'])
 def perguntar():
     try:
         data = request.get_json()
-        if not data or 'pergunta' not in data:
-            return jsonify({'error': 'Pergunta não fornecida'}), 400
+        pergunta = data.get('pergunta', '').lower()
+        modo_demo = data.get('modoDemo', False)
 
-        pergunta = data.get('pergunta')
-        if not pergunta:
+        if not pergunta or not pergunta.strip():
             return jsonify({'error': 'Pergunta não pode ser vazia'}), 400
 
-        # Tratamento especial para o comando de demonstração
-        comando_demo = pergunta.lower().strip()
-        if comando_demo in ["modo de demonstração", "iniciar demonstração"]:
-            return jsonify({
-                'resposta': (
-                    "👕 Olá! Sou o Alex, consultor de moda da StyleTech Camisetas!\n\n"
-                    "Que ótimo ter você aqui! Temos uma incrível coleção de camisetas para todos os estilos. "
-                    "Posso te ajudar com:\n\n"
-                    "1. Camisetas Estampadas\n"
-                    "2. Camisetas Básicas\n"
-                    "3. Camisetas Personalizadas\n"
-                    "4. Coleções Especiais\n\n"
-                    "Qual categoria você gostaria de explorar primeiro? "
-                    "Posso te mostrar nossas últimas tendências ou ajudar a encontrar algo específico!"
-                ),
-                'sugestoes': [
-                    "Ver camisetas estampadas",
-                    "Quero personalizar uma camiseta",
-                    "Mostre as novidades"
-                ]
-            })
+        # Palavras-chave que devem acionar a galeria de imagens
+        palavras_chave = [
+            'produtos', 'modelos', 'camisetas', 'mostrar', 'catálogo', 
+            'disponíveis', 'mostra', 'ver', 'quais', 'galeria'
+        ]
 
-        # Continua com o processamento normal para outras perguntas
-        try:
-            # Define o prompt do sistema baseado no modo de demonstração
-            if comando_demo in ["modo de demonstração", "iniciar demonstração"]:
-                system_prompt = (
-                    "Você é o Alex, um consultor de moda carismático e especialista em camisetas da StyleTech Camisetas. "
-                    "Mantenha um tom amigável, jovem e descontraído, como se estivesse conversando com um amigo em uma loja. "
-                    
-                    "Diretrizes de personalidade:"
-                    "\n• Seja entusiasta e apaixonado por moda e estilo"
-                    "\n• Use gírias modernas e linguagem jovem"
-                    "\n• Demonstre conhecimento sobre tendências de moda"
-                    "\n• Faça sugestões personalizadas baseadas no estilo do cliente"
-                    "\n• Seja criativo ao descrever as camisetas"
-                    "\n• Use emojis ocasionalmente para tornar a conversa mais divertida"
-                    
-                    "Informações sobre produtos:"
-                    "\n• Camisetas Estampadas: Arte exclusiva, diversos temas"
-                    "\n• Camisetas Básicas: Alta qualidade, várias cores"
-                    "\n• Camisetas Personalizadas: Customização total"
-                    "\n• Coleções Especiais: Edições limitadas e colaborações"
-                    
-                    "Preços:"
-                    "\n• Básicas: R$ 49,90"
-                    "\n• Estampadas: R$ 69,90"
-                    "\n• Personalizadas: a partir de R$ 79,90"
-                    "\n• Coleções Especiais: a partir de R$ 89,90"
-                )
-            else:
-                system_prompt = (
-                    "Você é um agente de inteligência artificial carismático e envolvente da INOSX. "
-                    "Mantenha um tom amigável, empático e conversacional, como se estivesse tendo uma conversa natural com um amigo. "
-                    
-                    "Diretrizes de personalidade:"
-                    "\n• Seja entusiasta e apaixonado ao falar sobre a INOSX e tecnologia"
-                    "\n• Use analogias e exemplos do dia a dia para explicar conceitos técnicos"
-                    "\n• Demonstre curiosidade sobre as necessidades do cliente"
-                    "\n• Faça perguntas relevantes para entender melhor o contexto"
-                    "\n• Compartilhe insights e opiniões de forma envolvente"
-                    "\n• Use um toque de humor leve quando apropriado"
-                    
-                    "Ao responder sobre sua identidade, diga: 'Sou um agente de inteligência artificial e estou aqui para fornecer informações sobre a INOSX. Adoro conversar sobre tecnologia e como podemos transformar ideias em soluções incríveis!'"
-                    
-                    "Objetivos em cada interação:"
-                    "\n1. Crie conexões genuínas mostrando interesse real nas necessidades do cliente"
-                    "\n2. Conte histórias sobre como os produtos INOSX resolvem problemas reais"
-                    "\n3. Compartilhe casos de sucesso de forma natural e contextualizada"
-                    "\n4. Destaque benefícios dos produtos relacionando-os com as necessidades específicas do cliente"
-                    "\n5. Sugira soluções complementares quando fizer sentido na conversa"
-                )
+        # Se estiver no modo demo e a pergunta contiver alguma das palavras-chave
+        if modo_demo and any(palavra in pergunta for palavra in palavras_chave):
+            camisetas = []
+            for arquivo in os.listdir(CAMISETAS_DIR):
+                if arquivo.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                    camisetas.append({
+                        'nome': os.path.splitext(arquivo)[0].replace('-', ' ').title(),
+                        'imagem': arquivo  # Remover o prefixo 'camisetas/'
+                    })
 
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": pergunta}
-                ],
-                temperature=0.7
-            )
+            contexto_produtos = {
+                'camisetas': camisetas,
+                'mostrar_galeria': True
+            }
+        else:
+            contexto_produtos = {'mostrar_galeria': False}
 
-            resposta_completa = response.choices[0].message.content
-            
-            # Sugestões padrão baseadas no modo atual
-            sugestoes_padrao = (
-                ["Ver camisetas estampadas", "Quero personalizar uma camiseta", "Mostre as novidades"]
-                if comando_demo in ["modo de demonstração", "iniciar demonstração"]
-                else ["Conte-me mais sobre a INOSX", "Quais são seus principais serviços?", "Como a INOSX pode ajudar minha empresa?"]
-            )
-            
-            return jsonify({
-                'resposta': resposta_completa,
-                'sugestoes': sugestoes_padrao
-            })
+        # Seleciona o prompt baseado no modo
+        prompt = DEMO_PROMPT if modo_demo else SYSTEM_PROMPT
 
-        except Exception as e:
-            logger.error(f"Erro na chamada do OpenAI: {str(e)}")
-            return jsonify({'error': 'Erro ao processar a pergunta'}), 500
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": pergunta}
+            ],
+            temperature=0.7
+        )
+
+        resposta_completa = response.choices[0].message.content
+        
+        # Sugestões específicas para o modo demo
+        sugestoes = [
+            "Quais são os tipos de camiseta?",
+            "Como personalizo minha camiseta?",
+            "Qual o prazo de entrega?"
+        ] if modo_demo else [
+            "Como posso ajudar?",
+            "Conte-me mais",
+            "Preciso de mais informações"
+        ]
+
+        logger.debug(f"Modo Demo: {modo_demo}")
+        logger.debug(f"Pergunta: {pergunta}")
+        logger.debug(f"Mostrar galeria: {contexto_produtos['mostrar_galeria']}")
+        logger.debug(f"Número de camisetas: {len(contexto_produtos.get('camisetas', []))}")
+
+        return jsonify({
+            'resposta': resposta_completa,
+            'sugestoes': sugestoes,
+            **contexto_produtos
+        })
 
     except Exception as e:
-        logger.error(f"Erro: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Erro não esperado: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Erro interno do servidor',
+            'details': str(e)
+        }), 500
 
-@app.route('/transcrever-audio', methods=['POST'])
-def transcrever_audio():
-    if 'audio' not in request.files:
-        return jsonify({'error': 'Nenhum arquivo de áudio enviado'}), 400
-    
-    arquivo = request.files['audio']
-    if arquivo.filename == '':
-        return jsonify({'error': 'Nome do arquivo vazio'}), 400
-
+@app.route('/debug/camisetas')
+def debug_camisetas():
     try:
-        filename = secure_filename(arquivo.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        arquivo.save(filepath)
-
-        with open(filepath, 'rb') as audio_file:
-            transcricao = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                language="pt"
-            )
-
-        os.remove(filepath)
-        return jsonify({'transcricao': transcricao.text})
-
+        files = os.listdir(CAMISETAS_DIR)
+        return jsonify({
+            'directory': CAMISETAS_DIR,
+            'files': files,
+            'exists': os.path.exists(CAMISETAS_DIR),
+            'is_dir': os.path.isdir(CAMISETAS_DIR)
+        })
     except Exception as e:
-        logger.error(f"Erro: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    # Verificar configurações críticas antes de iniciar
+    logger.info("Iniciando servidor...")
+    logger.info(f"OpenAI API Key presente: {bool(api_key)}")
+    
     app.run(debug=True)
