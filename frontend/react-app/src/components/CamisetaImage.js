@@ -1,64 +1,55 @@
-import React, { useState } from 'react';
-import { FaImage, FaShoppingCart } from 'react-icons/fa';
+import React, { useState, useEffect } from 'react';
+import { FaImage } from 'react-icons/fa';
 
 const CamisetaImage = ({ camiseta }) => {
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const handleImageError = (e) => {
-    console.warn('Imagem não encontrada:', camiseta.imagem);
-    setImageError(true);
-    setIsLoading(false);
-  };
+  const imagePath = `http://localhost:5000/static/camisetas/${camiseta.imagem}`;
 
-  const handleImageLoad = () => {
-    setIsLoading(false);
-  };
-
-  const handleCheckout = () => {
-    // Criar URL com parâmetros do produto
-    const checkoutUrl = `/checkout?` + new URLSearchParams({
-      produto: camiseta.nome,
-      imagem: camiseta.imagem,
-      preco: camiseta.preco || '39.90', // Preço padrão se não especificado
-      id: camiseta.id || Date.now()
-    }).toString();
-
-    // Abrir em nova aba
-    window.open(checkoutUrl, '_blank');
-  };
+  useEffect(() => {
+    console.log('Tentando carregar imagem:', imagePath);
+  }, [imagePath]);
 
   return (
-    <div className="relative w-full h-48 group cursor-pointer" onClick={handleCheckout}>
-      {isLoading && (
-        <div className="absolute inset-0 bg-gray-700 rounded-lg animate-pulse" />
-      )}
-      
-      {imageError ? (
-        <div className="w-full h-48 bg-gray-700 rounded-lg flex items-center justify-center">
-          <div className="text-center">
-            <FaImage className="mx-auto text-4xl text-gray-500 mb-2" />
-            <p className="text-sm text-gray-400">{camiseta.nome}</p>
+    <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gray-700">
+      {isLoading && !imageError && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="animate-pulse text-gray-400">
+            <FaImage size={24} />
           </div>
         </div>
-      ) : (
-        <>
-          <img
-            src={`http://localhost:5000/camisetas/${camiseta.imagem}`}
-            alt={camiseta.nome}
-            className={`w-full h-48 object-cover rounded-lg ${
-              isLoading ? 'opacity-0' : 'opacity-100'
-            } transition-opacity duration-300 group-hover:opacity-80`}
-            onError={handleImageError}
-            onLoad={handleImageLoad}
-          />
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black bg-opacity-50 rounded-lg">
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
-              <FaShoppingCart />
-              <span>Comprar</span>
-            </button>
-          </div>
-        </>
+      )}
+      
+      {!imageError && (
+        <img
+          src={imagePath}
+          alt={camiseta.nome}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+          onError={(e) => {
+            console.error('Erro ao carregar imagem:', imagePath);
+            setImageError(true);
+            setIsLoading(false);
+          }}
+          onLoad={() => {
+            console.log('Imagem carregada com sucesso:', imagePath);
+            setIsLoading(false);
+          }}
+        />
+      )}
+
+      {imageError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+          <FaImage className="text-gray-500 mb-2" size={32} />
+          <p className="text-sm text-gray-400 text-center">
+            Imagem não disponível
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {camiseta.imagem}
+          </p>
+        </div>
       )}
     </div>
   );

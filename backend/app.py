@@ -1,11 +1,9 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
-import openai
+from dotenv import load_dotenv  # Importação correta do load_dotenv
 import os
-from dotenv import load_dotenv
 import logging
-import os.path
-import shutil
+from openai import OpenAI  # Importação correta do OpenAI
 from pathlib import Path
 from PyPDF2 import PdfReader
 
@@ -15,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Definir o caminho absoluto para o diretório de camisetas
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-CAMISETAS_DIR = os.path.join(BACKEND_DIR, "camisetas")
+CAMISETAS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'camisetas')
 PDF_DIR = os.path.join(os.path.dirname(__file__), 'pdfs')
 
 # Log do caminho para debug
@@ -34,7 +32,7 @@ if not api_key:
     logger.error("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
     raise ValueError("OPENAI_API_KEY não encontrada")
 
-client = openai.Client(api_key=api_key)
+client = OpenAI(api_key=api_key)  # Corrigido para usar OpenAI ao invés de openai.Client
 
 # Primeiro carregamos o conteúdo dos PDFs
 def load_pdf_content():
@@ -198,24 +196,22 @@ Mantenha um tom profissional mas amigável, sempre focando nas soluções da Sty
 
 # Função para inicializar o diretório de camisetas com imagens de exemplo
 def init_camisetas_dir():
-    # Criar diretório se não existir
-    if not os.path.exists(CAMISETAS_DIR):
-        os.makedirs(CAMISETAS_DIR)
-        logger.info(f"Diretório de camisetas criado: {CAMISETAS_DIR}")
-    
-    # Lista de camisetas padrão (você precisará fornecer estas imagens)
+    # Lista de camisetas padrão
     camisetas_padrao = [
         {
             'nome': 'Camiseta Básica Preta',
-            'arquivo': 'camiseta-basica-preta.jpg'
+            'arquivo': 'camiseta-basica-preta.jpg',
+            'preco': '39.90'
         },
         {
             'nome': 'Camiseta Básica Branca',
-            'arquivo': 'camiseta-basica-branca.jpg'
+            'arquivo': 'camiseta-basica-branca.jpg',
+            'preco': '39.90'
         },
         {
             'nome': 'Camiseta Premium Azul',
-            'arquivo': 'camiseta-premium-azul.jpg'
+            'arquivo': 'camiseta-premium-azul.jpg',
+            'preco': '59.90'
         }
     ]
     
@@ -224,78 +220,33 @@ def init_camisetas_dir():
 # Chamar a função de inicialização ao iniciar o app
 camisetas_padrao = init_camisetas_dir()
 
-@app.route('/camisetas/<path:filename>')
-def serve_camiseta(filename):
-    try:
-        # Remover qualquer prefixo 'camisetas/' do filename
-        filename = filename.replace('camisetas/', '')
-        file_path = os.path.join(CAMISETAS_DIR, filename)
-        
-        logger.debug(f"Requisição de imagem recebida para: {filename}")
-        logger.debug(f"Caminho completo do arquivo: {file_path}")
-        
-        if not os.path.exists(file_path):
-            logger.error(f"Arquivo não encontrado: {file_path}")
-            return jsonify({"error": "Arquivo não encontrado"}), 404
-        
-        # Determinar o mimetype baseado na extensão do arquivo
-        extension = os.path.splitext(filename)[1].lower()
-        mimetype = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif'
-        }.get(extension, 'application/octet-stream')
-        
-        return send_file(
-            file_path,
-            mimetype=mimetype,
-            as_attachment=False,
-            etag=True,
-            conditional=True,
-            last_modified=os.path.getmtime(file_path)
-        )
-    except Exception as e:
-        logger.error(f"Erro ao servir imagem {filename}: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/listar-camisetas')
 def listar_camisetas():
     try:
-        logger.debug(f"Verificando diretório: {CAMISETAS_DIR}")
-        
+        # Verificar se o diretório existe
         if not os.path.exists(CAMISETAS_DIR):
-            logger.warning(f"Diretório de camisetas não encontrado: {CAMISETAS_DIR}")
-            return jsonify([])
-
+            os.makedirs(CAMISETAS_DIR)
+            print(f"Diretório criado: {CAMISETAS_DIR}")
+        
+        # Listar todos os arquivos de imagem no diretório
+        extensoes_validas = ('.jpg', '.jpeg', '.png', '.gif')
         camisetas = []
-        arquivos = os.listdir(CAMISETAS_DIR)
         
-        # Se não houver arquivos, retornar lista das camisetas padrão
-        if not arquivos:
-            return jsonify([
-                {
-                    'nome': camiseta['nome'],
-                    'imagem': camiseta['arquivo'],
-                    'id': idx + 1
-                }
-                for idx, camiseta in enumerate(camisetas_padrao)
-            ])
+        for arquivo in os.listdir(CAMISETAS_DIR):
+            if arquivo.lower().endswith(extensoes_validas):
+                nome = os.path.splitext(arquivo)[0].replace('-', ' ').title()
+                camisetas.append({
+                    'id': len(camisetas) + 1,
+                    'nome': nome,
+                    'imagem': arquivo,
+                    'preco': '39.90'  # Você pode ajustar o preço conforme necessário
+                })
 
-        # Se houver arquivos, listar as camisetas existentes
-        for arquivo in arquivos:
-            if arquivo.lower().endswith(('.png', '.jpg', '.jpeg')):
-                caminho_completo = os.path.join(CAMISETAS_DIR, arquivo)
-                if os.path.isfile(caminho_completo):
-                    camisetas.append({
-                        'nome': os.path.splitext(arquivo)[0].replace('-', ' ').title(),
-                        'imagem': arquivo,
-                        'id': len(camisetas) + 1
-                    })
-        
+        print(f"Camisetas encontradas: {camisetas}")
         return jsonify(camisetas)
+
     except Exception as e:
-        logger.error(f"Erro ao listar camisetas: {str(e)}")
+        print(f"Erro ao listar camisetas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # Carregar conteúdo dos PDFs ao iniciar a aplicação
@@ -305,39 +256,62 @@ pdf_content = load_pdf_content()
 def perguntar():
     try:
         data = request.get_json()
-        pergunta = data.get('pergunta', '').lower()
+        pergunta = data.get('pergunta')
+        modo_demo = data.get('modoDemo', False)
 
-        if not pergunta or not pergunta.strip():
-            return jsonify({'error': 'Pergunta não pode ser vazia'}), 400
+        if not pergunta:
+            return jsonify({'error': 'Pergunta não fornecida'}), 400
 
-        # Construir contexto específico baseado na pergunta
-        contexto_relevante = ""
-        
-        # Buscar informações relevantes nos documentos
-        for pdf_name, content in pdf_content['descricoes'].items():
-            contexto_relevante += f"\nConteúdo do documento {pdf_name}:\n{content}\n"
+        # Se estiver no modo demo e a pergunta for sobre mostrar/ver camisetas
+        if modo_demo and any(palavra in pergunta.lower() for palavra in ['mostrar', 'ver', 'exibir', 'imagem', 'foto', 'camiseta']):
+            # Listar camisetas do diretório
+            extensoes_validas = ('.jpg', '.jpeg', '.png', '.gif')
+            camisetas = []
+            
+            try:
+                for arquivo in os.listdir(CAMISETAS_DIR):
+                    if arquivo.lower().endswith(extensoes_validas):
+                        nome = os.path.splitext(arquivo)[0].replace('-', ' ').title()
+                        camisetas.append({
+                            'id': len(camisetas) + 1,
+                            'nome': nome,
+                            'imagem': arquivo,
+                            'preco': '39.90'
+                        })
+            except Exception as e:
+                logger.error(f"Erro ao listar diretório de camisetas: {str(e)}")
+                camisetas = []
+            
+            return jsonify({
+                'resposta': "Aqui estão nossas camisetas disponíveis:",
+                'sugestoes': [
+                    "Como funciona a personalização?",
+                    "Qual o prazo de entrega?",
+                    "Tem desconto para quantidade?"
+                ],
+                'mostrar_galeria': True,
+                'camisetas': camisetas
+            })
 
-        # Construir mensagem para o modelo
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "system", "content": f"Use as seguintes informações dos documentos para responder:\n{contexto_relevante}"},
-            {"role": "user", "content": pergunta}
-        ]
+        # Seleciona o prompt apropriado baseado no modo
+        current_prompt = DEMO_PROMPT if modo_demo else SYSTEM_PROMPT
 
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=messages,
+            messages=[
+                {"role": "system", "content": current_prompt},
+                {"role": "user", "content": pergunta}
+            ],
             temperature=0.7
         )
 
         resposta_completa = response.choices[0].message.content
-
-        # Gerar sugestões baseadas no contexto atual
-        sugestoes = gerar_sugestoes_contextuais(pergunta, resposta_completa)
+        sugestoes = gerar_sugestoes_contextuais(pergunta, resposta_completa, modo_demo)
 
         return jsonify({
             'resposta': resposta_completa,
-            'sugestoes': sugestoes
+            'sugestoes': sugestoes,
+            'mostrar_galeria': False
         })
 
     except Exception as e:
@@ -347,67 +321,114 @@ def perguntar():
             'details': str(e)
         }), 500
 
-def gerar_sugestoes_contextuais(pergunta, resposta):
+def gerar_sugestoes_contextuais(pergunta, resposta, modo_demo=False):
     """
     Gera sugestões de perguntas relacionadas baseadas no contexto atual
     """
     try:
-        # Criar prompt para gerar sugestões
-        sugestoes_prompt = f"""
-        Com base na pergunta do usuário: "{pergunta}"
-        E na resposta fornecida: "{resposta}"
-        
-        Gere 3 sugestões de perguntas relacionadas que o usuário poderia fazer em seguida.
-        As sugestões devem:
-        1. Ser relevantes ao contexto da conversa
-        2. Ajudar a aprofundar o entendimento sobre produtos/serviços da INOSX
-        3. Avançar naturalmente na jornada de vendas
-        
-        Retorne apenas as 3 perguntas, uma por linha, sem numeração ou formatação adicional.
-        """
-
-        # Gerar sugestões usando o GPT
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "Você é um especialista em vendas da INOSX."},
-                {"role": "user", "content": sugestoes_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=200
-        )
-
-        # Processar a resposta
-        sugestoes_texto = response.choices[0].message.content
-        sugestoes = [s.strip() for s in sugestoes_texto.split('\n') if s.strip()]
-        
-        # Garantir que temos exatamente 3 sugestões
-        while len(sugestoes) < 3:
-            sugestoes.append("Gostaria de conhecer mais sobre nossas soluções?")
-        
-        return sugestoes[:3]  # Retorna apenas as 3 primeiras sugestões
+        if modo_demo:
+            # Lógica específica para o modo StyleTech Camisetas
+            return gerar_sugestoes_camisetas(pergunta, resposta)
+        else:
+            # Mantém a lógica original da INOSX exatamente como estava
+            return gerar_sugestoes_inosx(pergunta, resposta)
 
     except Exception as e:
         logger.error(f"Erro ao gerar sugestões: {str(e)}")
-        # Sugestões padrão em caso de erro
-        return [
-            "Quais são os principais produtos da INOSX?",
-            "Poderia me contar mais sobre os casos de sucesso?",
-            "Como podemos começar uma parceria?"
-        ]
+        if modo_demo:
+            return [
+                "Quais são os modelos de camisetas disponíveis?",
+                "Como funciona a personalização?",
+                "Qual o prazo de entrega?"
+            ]
+        else:
+            return [
+                "Quais são os principais produtos da INOSX?",
+                "Poderia me contar mais sobre os casos de sucesso?",
+                "Como podemos começar uma parceria?"
+            ]
+
+def gerar_sugestoes_inosx(pergunta, resposta):
+    """
+    Mantém a lógica original da INOSX inalterada
+    """
+    sugestoes_prompt = f"""
+    Com base na pergunta do usuário: "{pergunta}"
+    E na resposta fornecida: "{resposta}"
+    
+    Gere 3 sugestões de perguntas relacionadas que o usuário poderia fazer em seguida.
+    As sugestões devem:
+    1. Ser relevantes ao contexto da conversa
+    2. Ajudar a aprofundar o entendimento sobre produtos/serviços da INOSX
+    3. Avançar naturalmente na jornada de vendas
+    
+    Retorne apenas as 3 perguntas, uma por linha, sem numeração ou formatação adicional.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "Você é um especialista em vendas da INOSX."},
+            {"role": "user", "content": sugestoes_prompt}
+        ],
+        temperature=0.7,
+        max_tokens=200
+    )
+
+    sugestoes_texto = response.choices[0].message.content
+    sugestoes = [s.strip() for s in sugestoes_texto.split('\n') if s.strip()]
+    
+    while len(sugestoes) < 3:
+        sugestoes.append("Gostaria de conhecer mais sobre nossas soluções?")
+    
+    return sugestoes[:3]
+
+def gerar_sugestoes_camisetas(pergunta, resposta):
+    """
+    Nova função específica para o modo StyleTech Camisetas
+    """
+    sugestoes_prompt = f"""
+    Com base na pergunta do usuário: "{pergunta}"
+    E na resposta fornecida: "{resposta}"
+    
+    Gere 3 sugestões de perguntas relacionadas ao contexto da StyleTech Camisetas.
+    As sugestões devem focar em:
+    - Tipos de camisetas (básica, premium, gola V, etc)
+    - Processos de personalização
+    - Prazos de entrega (5-7 dias úteis)
+    - Preços base (camisetas básicas R$39,90, premium R$59,90)
+    - Descontos para pedidos em quantidade
+    - Processo de pedido e personalização
+    
+    Retorne apenas as 3 perguntas, uma por linha, sem numeração ou formatação adicional.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": DEMO_PROMPT},
+            {"role": "user", "content": sugestoes_prompt}
+        ],
+        temperature=0.7,
+        max_tokens=200
+    )
+
+    sugestoes_texto = response.choices[0].message.content
+    sugestoes = [s.strip() for s in sugestoes_texto.split('\n') if s.strip()]
+    
+    while len(sugestoes) < 3:
+        sugestoes.append("Gostaria de ver mais modelos de camisetas?")
+    
+    return sugestoes[:3]
 
 @app.route('/debug/camisetas')
 def debug_camisetas():
-    try:
-        files = os.listdir(CAMISETAS_DIR)
-        return jsonify({
-            'directory': CAMISETAS_DIR,
-            'files': files,
-            'exists': os.path.exists(CAMISETAS_DIR),
-            'is_dir': os.path.isdir(CAMISETAS_DIR)
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({
+        'camisetas_dir': CAMISETAS_DIR,
+        'exists': os.path.exists(CAMISETAS_DIR),
+        'files': os.listdir(CAMISETAS_DIR) if os.path.exists(CAMISETAS_DIR) else [],
+        'current_dir': os.getcwd()
+    })
 
 @app.route('/debug/pdf-content', methods=['GET'])
 def debug_pdf_content():
@@ -421,6 +442,43 @@ def debug_pdf_content():
             'documentos_carregados': list(pdf_content['descricoes'].keys())
         }
     })
+
+@app.route('/debug/list-dir', methods=['GET'])
+def debug_list_dir():
+    """Rota para debug do diretório de camisetas"""
+    try:
+        return jsonify({
+            'camisetas_dir': CAMISETAS_DIR,
+            'exists': os.path.exists(CAMISETAS_DIR),
+            'files': os.listdir(CAMISETAS_DIR) if os.path.exists(CAMISETAS_DIR) else [],
+            'abs_path': os.path.abspath(CAMISETAS_DIR)
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'camisetas_dir': CAMISETAS_DIR
+        }), 500
+
+@app.route('/debug/files')
+def debug_files():
+    try:
+        files = os.listdir(CAMISETAS_DIR)
+        return jsonify({
+            'camisetas_dir': CAMISETAS_DIR,
+            'files': files,
+            'exists': os.path.exists(CAMISETAS_DIR),
+            'absolute_path': os.path.abspath(CAMISETAS_DIR)
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'camisetas_dir': CAMISETAS_DIR
+        }), 500
+
+# Configurar a pasta de arquivos estáticos
+@app.route('/camisetas/<path:filename>')
+def serve_camiseta(filename):
+    return send_from_directory(CAMISETAS_DIR, filename)
 
 if __name__ == '__main__':
     # Verificar configurações críticas antes de iniciar

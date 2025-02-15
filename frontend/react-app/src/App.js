@@ -18,6 +18,7 @@ import CamisetaImage from './components/CamisetaImage';
 import { marked } from 'marked';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Checkout from './components/Checkout';
+import CamisetasGaleria from './components/CamisetasGaleria';
 
 // Configuração do Axios
 axios.defaults.baseURL = 'http://localhost:5000';
@@ -97,6 +98,10 @@ function ChatInterface() {
   useEffect(() => {
     scrollToBottom();
   }, [respostas, isLoading]);
+
+  useEffect(() => {
+    console.log('Todas as respostas:', respostas);
+  }, [respostas]);
 
   const handleDemoMode = () => {
     setModoDemo(true);
@@ -349,12 +354,34 @@ function ChatInterface() {
   };
 
   const RespostaCamisetas = ({ camisetas }) => {
+    console.log('Renderizando RespostaCamisetas com:', camisetas);
+
+    if (!camisetas || camisetas.length === 0) {
+      return (
+        <div className="text-center text-gray-400 py-8">
+          Nenhuma camiseta disponível no momento.
+        </div>
+      );
+    }
+
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {camisetas.map((camiseta, index) => (
           <div key={index} className="bg-gray-800 p-4 rounded-lg">
-            <CamisetaImage camiseta={camiseta} />
-            <h3 className="text-sm font-medium text-center">{camiseta.nome}</h3>
+            <img
+              // Aqui está a mudança principal - usando o caminho correto
+              src={`http://localhost:5000/camisetas/${camiseta.imagem}`}
+              alt={camiseta.nome}
+              className="w-full h-48 object-cover rounded-lg"
+              onError={(e) => {
+                console.error('Erro ao carregar imagem:', e.target.src);
+                e.target.src = '/placeholder.jpg';
+              }}
+            />
+            <div className="mt-2 text-center">
+              <h3 className="text-sm font-medium text-white">{camiseta.nome}</h3>
+              <p className="text-sm text-gray-400">R$ {camiseta.preco}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -394,81 +421,104 @@ function ChatInterface() {
         className="flex-1 p-4 overflow-y-auto space-y-4"
         style={{ maxHeight: 'calc(100vh - 140px)' }} // Ajuste para garantir espaço suficiente
       >
-        {respostas.map((msg, index) => (
-          <div key={index} className="space-y-2">
-            <div
-              className={`p-6 rounded-lg max-w-3xl ${
-                msg.tipo === "user"
-                  ? "bg-blue-600 ml-auto text-white"
-                  : "bg-gray-800 border-l-4 border-blue-500 shadow-lg"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                {msg.tipo === "bot" && (
-                  <div className="flex-shrink-0">
-                    <img 
-                      src={modoDemo ? "/vendedor/woman.png" : "/agente/foto.jpg"}
-                      alt="Agente IA"
-                      className={`agent-avatar ${imageLoaded ? 'agent-avatar-loaded' : 'agent-avatar-loading'}`}
-                      onLoad={() => setImageLoaded(true)}
-                    />
-                  </div>
-                )}
-                <div className="flex-grow">
-                  {msg.tipo === "bot" ? (
-                    <div
-                      className="prose prose-invert max-w-none"
-                      dangerouslySetInnerHTML={{
-                        __html: formatarResposta(msg.texto)
-                          .replace(
-                            /<p>/g,
-                            '<p class="mb-4 leading-relaxed text-gray-300">'
-                          )
-                          .replace(
-                            /<ul>/g,
-                            '<ul class="space-y-2 my-4 list-none">'
-                          )
-                          .replace(
-                            /<li>/g,
-                            '<li class="flex items-start gap-2"><span class="text-blue-400">•</span>'
-                          )
-                          .replace(
-                            /<h(\d)>/g,
-                            '<h$1 class="text-blue-300 font-semibold mb-3 mt-4">'
-                          )
-                      }}
-                    />
-                  ) : (
-                    <p className="text-white">{msg.texto}</p>
+        {respostas.map((msg, index) => {
+          console.log('Renderizando mensagem:', {
+            tipo: msg.tipo,
+            texto: msg.texto,
+            mostrar_galeria: msg.mostrar_galeria,
+            tem_camisetas: Boolean(msg.camisetas),
+            num_camisetas: msg.camisetas?.length
+          });
+          
+          return (
+            <div key={index} className="space-y-2">
+              <div
+                className={`p-6 rounded-lg max-w-3xl ${
+                  msg.tipo === "user"
+                    ? "bg-blue-600 ml-auto text-white"
+                    : "bg-gray-800 border-l-4 border-blue-500 shadow-lg"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {msg.tipo === "bot" && (
+                    <div className="flex-shrink-0">
+                      <img 
+                        src={modoDemo ? "/vendedor/woman.png" : "/agente/foto.jpg"}
+                        alt="Agente IA"
+                        className={`agent-avatar ${imageLoaded ? 'agent-avatar-loaded' : 'agent-avatar-loading'}`}
+                        onLoad={() => setImageLoaded(true)}
+                      />
+                    </div>
                   )}
+                  <div className="flex-grow">
+                    {msg.tipo === "bot" ? (
+                      <div
+                        className="prose prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{
+                          __html: formatarResposta(msg.texto)
+                            .replace(
+                              /<p>/g,
+                              '<p class="mb-4 leading-relaxed text-gray-300">'
+                            )
+                            .replace(
+                              /<ul>/g,
+                              '<ul class="space-y-2 my-4 list-none">'
+                            )
+                            .replace(
+                              /<li>/g,
+                              '<li class="flex items-start gap-2"><span class="text-blue-400">•</span>'
+                            )
+                            .replace(
+                              /<h(\d)>/g,
+                              '<h$1 class="text-blue-300 font-semibold mb-3 mt-4">'
+                            )
+                        }}
+                      />
+                    ) : (
+                      <p className="text-white">{msg.texto}</p>
+                    )}
+                  </div>
                 </div>
               </div>
+              {msg.tipo === "bot" && msg.sugestoes && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {msg.sugestoes.map((sugestao, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSugestao(sugestao)}
+                      className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-full text-sm"
+                    >
+                      {sugestao}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {msg.tipo === "bot" && msg.mostrar_galeria && msg.camisetas && (
+                <div className="mt-4 bg-gray-800 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {msg.camisetas.map((camiseta, idx) => (
+                      <div key={idx} className="bg-gray-700 p-4 rounded-lg">
+                        <img
+                          src={`http://localhost:5000/camisetas/${camiseta.imagem}`}
+                          alt={camiseta.nome}
+                          className="w-full h-48 object-cover rounded-lg"
+                          onError={(e) => {
+                            console.error('Erro ao carregar imagem:', e.target.src);
+                            e.target.src = '/placeholder.jpg';
+                          }}
+                        />
+                        <div className="mt-2 text-center">
+                          <h3 className="text-sm font-medium text-white">{camiseta.nome}</h3>
+                          <p className="text-sm text-gray-400">R$ {camiseta.preco}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            {msg.tipo === "bot" && msg.sugestoes && (
-              <div className="flex flex-wrap gap-3 mt-3">
-                {msg.sugestoes.map((sugestao, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => enviarPergunta(sugestao)}
-                    className={`
-                      flex items-center gap-2 px-4 py-2 rounded-full
-                      border-2 
-                      ${idx === 0 ? 'border-blue-500 text-blue-500 hover:bg-blue-500' : 
-                        idx === 1 ? 'border-purple-500 text-purple-500 hover:bg-purple-500' :
-                        'border-green-500 text-green-500 hover:bg-green-500'}
-                      transition-all duration-300 ease-in-out
-                      hover:text-white hover:shadow-lg
-                      text-sm font-medium
-                    `}
-                  >
-                    <FaLightbulb className="text-base" />
-                    <span>{sugestao}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
         {isLoading && (
           <div className="flex items-center space-x-2 text-gray-400">
             <FaRobot className="text-xl" />

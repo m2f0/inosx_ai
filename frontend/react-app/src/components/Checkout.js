@@ -45,7 +45,7 @@ const Checkout = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <img
-                src={`http://localhost:5000/camisetas/${produto.imagem}`}
+                src={`/camisetas/${produto.imagem}`}
                 alt={produto.nome}
                 className="w-full rounded-lg"
               />
