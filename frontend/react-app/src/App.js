@@ -109,6 +109,8 @@ function ChatInterface() {
         "Qual o prazo de entrega?"
       ]
     }]);
+    // Resetar o estado da imagem carregada para o novo avatar
+    setImageLoaded(false);
   };
 
   const enviarPergunta = async (perguntaTexto = pergunta) => {
@@ -273,7 +275,7 @@ function ChatInterface() {
           {msg.tipo === "bot" && (
             <div className="flex-shrink-0">
               <img 
-                src="/agente/foto.jpg"
+                src={modoDemo ? "/vendedor/woman.png" : "/agente/foto.jpg"}
                 alt="Agente IA"
                 className={`agent-avatar ${imageLoaded ? 'agent-avatar-loaded' : 'agent-avatar-loading'}`}
                 onLoad={() => setImageLoaded(true)}
@@ -405,7 +407,7 @@ function ChatInterface() {
                 {msg.tipo === "bot" && (
                   <div className="flex-shrink-0">
                     <img 
-                      src="/agente/foto.jpg"
+                      src={modoDemo ? "/vendedor/woman.png" : "/agente/foto.jpg"}
                       alt="Agente IA"
                       className={`agent-avatar ${imageLoaded ? 'agent-avatar-loaded' : 'agent-avatar-loading'}`}
                       onLoad={() => setImageLoaded(true)}
