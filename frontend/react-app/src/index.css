@@ -1,3 +1,77 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Adicione estilos personalizados para os botões de sugestão */
+.suggestion-button-hover {
+  @apply transform hover:-translate-y-0.5;
+}
+
+/* Opcional: adicione uma animação suave ao ícone */
+.suggestion-icon {
+  @apply transition-transform duration-300;
+}
+
+.suggestion-button-hover:hover .suggestion-icon {
+  @apply rotate-12;
+}
+
+/* Estilos para o conteúdo das mensagens */
+.prose {
+  @apply text-gray-300;
+}
+
+.prose p {
+  @apply mb-4 leading-relaxed;
+}
+
+.prose strong {
+  @apply text-blue-300 font-semibold;
+}
+
+.prose ul {
+  @apply space-y-3 my-4;
+}
+
+.prose li {
+  @apply flex items-start gap-2;
+  @apply pl-4 relative;
+}
+
+.prose li::before {
+  @apply absolute left-0 text-blue-400;
+  content: "•";
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  @apply text-blue-300 font-semibold mb-3 mt-4;
+}
+
+/* Animação de entrada para as mensagens */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-animation {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+.agent-avatar {
+  @apply w-8 h-8 rounded-full object-cover ring-2 ring-blue-400;
+  @apply transition-opacity duration-300;
+}
+
+.agent-avatar-loading {
+  @apply opacity-0;
+}
+
+.agent-avatar-loaded {
+  @apply opacity-100;
+}
