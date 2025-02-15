@@ -51,7 +51,9 @@ function ChatInterface() {
   marked.setOptions({
     breaks: true,
     gfm: true,
-    sanitize: false
+    sanitize: false,
+    headerIds: false,
+    mangle: false
   });
 
   // Função para limpar o texto de tags HTML
@@ -261,11 +263,25 @@ function ChatInterface() {
       >
         <div className="flex justify-between items-start">
           {msg.tipo === "bot" && <FaRobot className="text-xl mt-1 mr-2 flex-shrink-0" />}
-          <div className="flex-grow">
+          <div className="flex-grow prose prose-invert">
             {msg.tipo === "bot" ? (
               <div 
-                className="markdown-content"
-                dangerouslySetInnerHTML={{ __html: formatarResposta(msg.texto) }} 
+                className="markdown-content text-gray-300"
+                dangerouslySetInnerHTML={{ 
+                  __html: formatarResposta(msg.texto).replace(
+                    /<p>/g, 
+                    '<p class="mb-3 leading-relaxed">'
+                  ).replace(
+                    /<ol>/g,
+                    '<ol class="list-decimal list-inside space-y-2 mb-3">'
+                  ).replace(
+                    /<ul>/g,
+                    '<ul class="list-disc list-inside space-y-2 mb-3">'
+                  ).replace(
+                    /<li>/g,
+                    '<li class="ml-4">'
+                  )
+                }} 
               />
             ) : (
               msg.texto
