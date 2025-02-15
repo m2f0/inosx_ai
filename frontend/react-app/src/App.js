@@ -397,7 +397,7 @@ function ChatInterface() {
             onClick={handleDemoMode}
             className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
           >
-            Modo Demo
+            Modo Demo: StyleTech Camisetas
           </button>
         ) : (
           <div className="flex items-center">
